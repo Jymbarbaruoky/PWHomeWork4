@@ -12,14 +12,18 @@ from jinja2 import Environment, FileSystemLoader
 
 BASE_DIR = pathlib.Path()
 env = Environment(loader=FileSystemLoader('templates'))
-SERVER_IP = '127.0.0.1'
-SERVER_PORT = 5000
+SOCKET_IP = '127.0.0.1'
+SOCKET_PORT = 5000
 BUFFER = 1024
+SERVER_IP = '0.0.0.0'
+SERVER_PORT = 3000
+STORAGE_DIR = pathlib.Path().joinpath('storage')
+FILE_STORAGE = STORAGE_DIR / 'data.json'
 
 
 def send_data_to_socket(body):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.sendto(body, (SERVER_IP, SERVER_PORT))
+    client_socket.sendto(body, (SOCKET_IP, SOCKET_PORT))
     client_socket.close()
 
 class HTTPHandler(BaseHTTPRequestHandler):
@@ -65,7 +69,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
 
 def run(server=HTTPServer, handler=HTTPHandler):
-    address = ('0.0.0.0', 3000)
+    address = (SERVER_IP, SERVER_PORT)
     http_server = server(address, handler)
     try:
         http_server.serve_forever()
@@ -74,6 +78,9 @@ def run(server=HTTPServer, handler=HTTPHandler):
 
 def save_data(data):
     body = urllib.parse.unquote_plus(data.decode())
+    if not FILE_STORAGE.exists():
+        with open(FILE_STORAGE, 'w', encoding='utf-8') as fd:
+            json.dump({}, fd, ensure_ascii=False)
     try:
         with open(BASE_DIR.joinpath('storage/data.json'), 'r', encoding='utf-8') as fd:
             payload = json.load(fd)
@@ -98,16 +105,14 @@ def run_socket_server(ip, port):
     finally:
         server_socket.close()
 
-
-if __name__ == '__main__':
+def run_on_thread():
     logging.basicConfig(level=logging.INFO, format="%(threadName)s %(message)s")
-    STORAGE_DIR = pathlib.Path().joinpath('storage')
-    FILE_STORAGE = STORAGE_DIR / 'data.json'
-    if not FILE_STORAGE.exists():
-        with open(FILE_STORAGE, 'w', encoding='utf-8') as fd:
-            json.dump({}, fd, ensure_ascii=False)
-
     thread_server = Thread(target=run)
     thread_server.start()
-    thread_socket = Thread(target=run_socket_server(SERVER_IP, SERVER_PORT))
+    thread_socket = Thread(target=run_socket_server(SOCKET_IP, SOCKET_PORT))
     thread_socket.start()
+
+
+if __name__ == '__main__':
+    run_on_thread()
+
